@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthController } from './auth/auth.controller.js';
+import { AuthGuard } from './auth/auth.guard.js';
 import { AuthService } from './auth/auth.service.js';
 import { TasksController } from './tasks.controller.js';
 import { TasksService } from './tasks.service.js';
@@ -49,6 +50,6 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
   ],
   controllers: [AppController, TasksController, AuthController],
-  providers: [AppService, TasksService, AuthService],
+  providers: [AppService, TasksService, AuthService, AuthGuard],
 })
 export class AppModule {}
