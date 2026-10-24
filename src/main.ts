@@ -1,24 +1,22 @@
-import { Logger, LogLevel, ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import type { NextFunction, Request, Response } from 'express';
+import {
+  ClassSerializerInterceptor,
+  LogLevel,
+  ValidationPipe,
+} from '@nestjs/common';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule, ObserveInstrument } from './app.module.js';
+import { LoggingInterceptor } from './logging.interceptor.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     instrument: ObserveInstrument,
     logger: getLogLevels(),
   });
-  const requestLogger = new Logger('HTTP');
   app.useGlobalPipes(new ValidationPipe());
-  app.use((request: Request, response: Response, next: NextFunction) => {
-    const startedAt = Date.now();
-    response.on('finish', () => {
-      requestLogger.log(
-        `${request.method} ${request.path} ${response.statusCode} ${Date.now() - startedAt}ms`,
-      );
-    });
-    next();
-  });
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new ClassSerializerInterceptor(app.get(Reflector)),
+  );
   await app.listen(process.env.PORT ?? 3000);
 }
 

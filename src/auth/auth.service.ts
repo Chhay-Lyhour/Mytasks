@@ -19,9 +19,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(
-    registerDto: RegisterDto,
-  ): Promise<{ id: number; email: string }> {
+  async register(registerDto: RegisterDto): Promise<User> {
     const email = registerDto.email.trim().toLowerCase();
     const existingUser = await this.usersRepository.findOneBy({ email });
     if (existingUser) {
@@ -35,7 +33,7 @@ export class AuthService {
 
     try {
       const savedUser = await this.usersRepository.save(user);
-      return { id: savedUser.id, email: savedUser.email };
+      return savedUser;
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('Email is already registered');
