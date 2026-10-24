@@ -35,13 +35,34 @@ $ npm install
 
 Install PostgreSQL and create a database named `mytasks`. Copy `.env.example` to
 `.env`, then set `DB_HOST`, `DB_PORT`, `DB_USERNAME`, and `DB_PASSWORD` to match
-your local PostgreSQL installation. The `.env` file is ignored by Git; only the
+your local PostgreSQL installation. Replace `JWT_SECRET` with a long random
+secret and keep it private. The `.env` file is ignored by Git; only the
 fake-value template should be committed.
 
 The app loads these values through `ConfigModule` and configures its PostgreSQL
 connection with `TypeOrmModule`. Schema synchronization is disabled; database
 tables are managed with TypeORM migrations. Tasks are stored in the PostgreSQL
-`tasks` table, so they remain available after the application restarts.
+`tasks` table and registered accounts are stored in the `users` table, so they
+remain available after the application restarts.
+
+## Authentication
+
+Register an account with `POST /auth/register`:
+
+```json
+{
+  "email": "you@example.com",
+  "password": "your-password"
+}
+```
+
+Registration returns the new user's `id` and `email`; passwords are stored as
+bcrypt hashes and are never included in API responses. Registering an email that
+already exists returns `409 Conflict`.
+
+Log in with `POST /auth/login` using the same JSON fields. A successful login
+returns an `access_token` JWT. An incorrect email/password returns
+`401 Unauthorized`.
 
 Run TypeORM migrations from the project root:
 

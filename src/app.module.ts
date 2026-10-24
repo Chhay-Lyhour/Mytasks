@@ -1,12 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { AuthController } from './auth/auth.controller.js';
+import { AuthService } from './auth/auth.service.js';
 import { TasksController } from './tasks.controller.js';
 import { TasksService } from './tasks.service.js';
 import { Task } from './task.entity.js';
+import { User } from './user.entity.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -29,14 +33,22 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         synchronize: false,
       }),
     }),
-    TypeOrmModule.forFeature([Task]),
+    TypeOrmModule.forFeature([Task, User]),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '1h' },
+      }),
+    }),
     ObserveModule.forRoot({
       appKey: process.env.OBSERVE_APP_KEY ?? 'YOUR_APP_KEY',
       appSecret: process.env.OBSERVE_APP_SECRET ?? 'YOUR_APP_SECRET',
       serviceId: 'mytasks',
     }),
   ],
-  controllers: [AppController, TasksController],
-  providers: [AppService, TasksService],
+  controllers: [AppController, TasksController, AuthController],
+  providers: [AppService, TasksService, AuthService],
 })
 export class AppModule {}
