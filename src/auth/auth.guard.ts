@@ -4,8 +4,10 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { IS_PUBLIC_KEY } from './public.decorator.js';
 
 export interface AuthenticatedUser {
   sub: number;
@@ -18,9 +20,20 @@ interface AuthenticatedRequest extends Request {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly reflector: Reflector,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authorization = request.headers.authorization;
     const [scheme, token, ...extraParts] = authorization?.split(' ') ?? [];
@@ -32,16 +45,12 @@ export class AuthGuard implements CanActivate {
     try {
       const payload =
         await this.jwtService.verifyAsync<Record<string, unknown>>(token);
-      if (
-        typeof payload.sub !== 'number' ||
-        !Number.isInteger(payload.sub) ||
-        payload.sub <= 0 ||
-        typeof payload.email !== 'string'
-      ) {
+      const userId = this.readUserId(payload.sub);
+      if (userId === null || typeof payload.email !== 'string') {
         throw new UnauthorizedException('Invalid token payload');
       }
 
-      request.user = { sub: payload.sub, email: payload.email };
+      request.user = { sub: userId, email: payload.email };
       return true;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
@@ -49,5 +58,16 @@ export class AuthGuard implements CanActivate {
       }
       throw new UnauthorizedException('Invalid or expired Bearer token');
     }
+  }
+
+  private readUserId(sub: unknown): number | null {
+    if (typeof sub === 'number' && Number.isInteger(sub) && sub > 0) {
+      return sub;
+    }
+    if (typeof sub === 'string' && /^\d+$/.test(sub)) {
+      const parsed = Number(sub);
+      return parsed > 0 ? parsed : null;
+    }
+    return null;
   }
 }

@@ -1,4 +1,11 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { User } from './user.entity.js';
 
 @Entity('tasks')
 export class Task {
@@ -13,4 +20,11 @@ export class Task {
 
   @Column({ type: 'integer', default: 0 })
   priority!: number;
+
+  @Column()
+  userId!: number;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })
+  user!: User;
 }

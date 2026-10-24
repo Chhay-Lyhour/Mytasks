@@ -47,22 +47,38 @@ remain available after the application restarts.
 
 ## Authentication
 
-Register an account with `POST /auth/register`:
+All API routes are under `/api` and are protected by a global auth guard unless
+they are marked public (`signup`, `login`, `refresh`, and `logout`).
+
+Register an account with `POST /api/auth/signup` (also available as
+`POST /api/auth/register`):
 
 ```json
 {
-  "email": "you@example.com",
-  "password": "your-password"
+  "email": "alice@test.dev",
+  "password": "secret123"
 }
 ```
 
-Registration returns the new user's `id` and `email`; passwords are stored as
-bcrypt hashes and are never included in API responses. Registering an email that
-already exists returns `409 Conflict`.
+Registration returns `{ "id": 1, "email": "alice@test.dev" }`. Passwords are
+stored as bcrypt hashes and are never included in API responses. Registering an
+email that already exists returns `409 Conflict`.
 
-Log in with `POST /auth/login` using the same JSON fields. A successful login
-returns an `access_token` JWT. An incorrect email/password returns
-`401 Unauthorized`.
+Log in with `POST /api/auth/login` using the same JSON fields. A successful
+login returns `{ "accessToken": "..." }` and sets a rotated refresh token in an
+HttpOnly cookie. An incorrect email/password returns `401` with
+`Invalid credentials`.
+
+`GET /api/todos` requires a Bearer access token and returns only the signed-in
+user's to-dos. `GET /api/todos/:id` returns `404` if the to-do belongs to
+someone else.
+
+Refresh the access token with `POST /api/auth/refresh` (cookie-based, rotated).
+Revoke it with `POST /api/auth/logout`.
+
+A small React client lives in `web/`. It keeps the access token in memory and
+uses an axios interceptor to call `/api/auth/refresh` on `401`. Run it with
+`npm run start:web` while the API is on port 3000.
 
 Run TypeORM migrations from the project root:
 
