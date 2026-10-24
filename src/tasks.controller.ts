@@ -4,10 +4,13 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
 } from '@nestjs/common';
 import { UserAgent } from './common/user-agent.decorator.js';
+import { CreateTaskDto } from './tasks/dto/create-task.dto.js';
+import { UpdateTaskDto } from './tasks/dto/update-task.dto.js';
 import { TasksService } from './tasks.service.js';
 
 @Controller('tasks')
@@ -40,23 +43,25 @@ export class TasksController {
   }
 
   @Post()
-  createTask(@Body() body: { title: string }) {
+  createTask(@Body() body: CreateTaskDto) {
     return this.tasksService.create(body.title);
   }
 
   @Patch(':id')
-  updateTask(@Param('id') id: string, @Body() body: { done: boolean }) {
-    return this.tasksService.update(Number(id), body.done);
+  updateTask(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateTaskDto,
+  ) {
+    return this.tasksService.update(id, body.done);
   }
 
   @Delete(':id')
-  deleteTask(@Param('id') id: string) {
-    return this.tasksService.remove(Number(id));
+  deleteTask(@Param('id', ParseIntPipe) id: number) {
+    return this.tasksService.remove(id);
   }
 
   @Get(':id')
-  async getTaskById(@Param('id') id: string) {
-    const task = await this.tasksService.findOne(Number(id));
-    return task;
+  getTaskById(@Param('id', ParseIntPipe) id: number) {
+    return this.tasksService.findOne(id);
   }
 }
