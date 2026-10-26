@@ -61,7 +61,7 @@ export class TasksController {
     @Body() body: UpdateTaskDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.tasksService.update(id, body.done, user.sub);
+    return this.tasksService.update(id, body, user.sub);
   }
 
   @Delete(':id')

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
@@ -11,6 +12,8 @@ import { AuthGuard } from './auth/auth.guard.js';
 import { AuthService } from './auth/auth.service.js';
 import { TasksController } from './tasks.controller.js';
 import { TasksService } from './tasks.service.js';
+import { TaskNotificationsListener } from './tasks/task-notifications.listener.js';
+import { TaskStatsListener } from './tasks/task-stats.listener.js';
 import { RefreshToken } from './refresh-token.entity.js';
 import { Task } from './task.entity.js';
 import { User } from './user.entity.js';
@@ -22,6 +25,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -55,6 +59,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
   providers: [
     AppService,
     TasksService,
+    TaskNotificationsListener,
+    TaskStatsListener,
     AuthService,
     AuthGuard,
     {

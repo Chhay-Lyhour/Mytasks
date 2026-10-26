@@ -1,9 +1,29 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  Injectable,
+  Logger,
+  ValidationPipe,
+} from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { TaskCreatedEvent } from '../src/tasks/task-created.event.js';
+
+@Injectable()
+class ThrowingTaskCreatedTestListener {
+  static enabled = false;
+  private readonly logger = new Logger(ThrowingTaskCreatedTestListener.name);
+
+  @OnEvent('task.created')
+  handleTaskCreated(_event: TaskCreatedEvent): void {
+    if (ThrowingTaskCreatedTestListener.enabled) {
+      throw new Error('Intentional listener error for isolation test');
+    }
+  }
+}
 
 describe('Session 3 auth lab (e2e)', () => {
   let app: INestApplication<App>;
@@ -20,6 +40,7 @@ describe('Session 3 auth lab (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
+      providers: [ThrowingTaskCreatedTestListener],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -87,11 +108,27 @@ describe('Session 3 auth lab (e2e)', () => {
       /refreshToken=/,
     );
 
-    await request(app.getHttpServer())
+    const aliceTodo = await request(app.getHttpServer())
       .post('/api/todos')
       .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
       .send({ title: "Alice's homework" })
       .expect(201);
+
+    const titleUpdatedTodo = await request(app.getHttpServer())
+      .patch(`/api/todos/${aliceTodo.body.id}`)
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .send({ title: 'Buy milk' })
+      .expect(200);
+    expect(titleUpdatedTodo.body.title).toBe('Buy milk');
+    expect(titleUpdatedTodo.body.done).toBe(false);
+
+    const completedTodo = await request(app.getHttpServer())
+      .patch(`/api/todos/${aliceTodo.body.id}`)
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .send({ done: true })
+      .expect(200);
+    expect(completedTodo.body.title).toBe('Buy milk');
+    expect(completedTodo.body.done).toBe(true);
 
     const bobTodo = await request(app.getHttpServer())
       .post('/api/todos')
@@ -105,7 +142,8 @@ describe('Session 3 auth lab (e2e)', () => {
       .expect(200);
 
     expect(aliceTodos.body).toHaveLength(1);
-    expect(aliceTodos.body[0].title).toBe("Alice's homework");
+    expect(aliceTodos.body[0].title).toBe('Buy milk');
+    expect(aliceTodos.body[0].done).toBe(true);
     expect(
       aliceTodos.body.every(
         (todo: { ownerId: number }) =>
@@ -117,6 +155,24 @@ describe('Session 3 auth lab (e2e)', () => {
       .get(`/api/todos/${bobTodo.body.id}`)
       .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
       .expect(404);
+  });
+
+  it('returns 201 when a task-created listener throws', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+
+    ThrowingTaskCreatedTestListener.enabled = true;
+    try {
+      await request(app.getHttpServer())
+        .post('/api/todos')
+        .set('Authorization', `Bearer ${login.body.accessToken}`)
+        .send({ title: 'Listener failure should not fail this request' })
+        .expect(201);
+    } finally {
+      ThrowingTaskCreatedTestListener.enabled = false;
+    }
   });
 
   it('rotates refresh tokens once and revokes them on logout', async () => {

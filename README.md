@@ -109,6 +109,15 @@ The matching Postman Runner collection is
 Import it, keep `baseUrl` set to `http://localhost:3000/api`, select the
 Desktop Agent, and run the collection to exercise the same two-user flow.
 
+## Demonstrate task events
+
+Import
+[`postman/MyTasks-Task-Events-Demo.postman_collection.json`](./postman/MyTasks-Task-Events-Demo.postman_collection.json).
+Open the API terminal and Postman side by side, then send each request manually
+in order: sign up, login, create, and PATCH. The create request emits
+`task.created` to both listeners; the title-only PATCH emits `task.updated`.
+The PATCH response should have `title: "Buy milk"` and `done: false`.
+
 The API1/Broken Object Level Authorization risk is cross-user access through a
 to-do ID. To prevent it, every to-do query includes the authenticated user's
 `ownerId`; the e2e suite checks that Alice receives `404` for Bob's to-do. The
