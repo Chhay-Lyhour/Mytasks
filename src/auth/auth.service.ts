@@ -7,7 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
-import { IsNull, QueryFailedError, Repository } from 'typeorm';
+import { IsNull, MoreThan, QueryFailedError, Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { RefreshToken } from '../refresh-token.entity.js';
@@ -80,8 +80,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    stored.revokedAt = new Date();
-    await this.refreshTokensRepository.save(stored);
+    const consumedAt = new Date();
+    const consumed = await this.refreshTokensRepository.update(
+      {
+        id: stored.id,
+        revokedAt: IsNull(),
+        expiresAt: MoreThan(consumedAt),
+      },
+      { revokedAt: consumedAt },
+    );
+    if (consumed.affected !== 1) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     return this.issueTokens(user);
   }

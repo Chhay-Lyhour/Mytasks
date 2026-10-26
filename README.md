@@ -80,6 +80,41 @@ A small React client lives in `web/`. It keeps the access token in memory and
 uses an axios interceptor to call `/api/auth/refresh` on `401`. Run it with
 `npm run start:web` while the API is on port 3000.
 
+## Run the auth and authorization lab
+
+Apply any pending database migrations:
+
+```bash
+npm run migration:run
+```
+
+Start the API in one terminal and the React UI in another:
+
+```bash
+npm run start:dev
+```
+
+```bash
+npm run start:web
+```
+
+Open <http://localhost:5173>. Sign up Alice, add a to-do, log out, and sign up
+Bob. Each account should see only its own to-dos. For an API-level check, run
+`npm run test:e2e`; it verifies signup, duplicate-email rejection, bad-password
+rejection, unauthenticated access, cross-user to-do isolation, refresh-token
+rotation, and logout.
+
+The matching Postman Runner collection is
+[`postman/MyTasks-AuthZ-Lab.postman_collection.json`](./postman/MyTasks-AuthZ-Lab.postman_collection.json).
+Import it, keep `baseUrl` set to `http://localhost:3000/api`, select the
+Desktop Agent, and run the collection to exercise the same two-user flow.
+
+The API1/Broken Object Level Authorization risk is cross-user access through a
+to-do ID. To prevent it, every to-do query includes the authenticated user's
+`ownerId`; the e2e suite checks that Alice receives `404` for Bob's to-do. The
+refresh endpoint also consumes tokens with a conditional database update so
+simultaneous requests cannot both rotate the same token.
+
 Run TypeORM migrations from the project root:
 
 ```bash
@@ -186,4 +221,5 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
 # Mytasks

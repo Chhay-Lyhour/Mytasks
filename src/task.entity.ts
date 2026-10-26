@@ -21,10 +21,10 @@ export class Task {
   @Column({ type: 'integer', default: 0 })
   priority!: number;
 
-  @Column()
-  userId!: number;
+  @Column({ nullable: true })
+  ownerId!: number | null;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
-  user!: User;
+  @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'ownerId' })
+  user!: User | null;
 }

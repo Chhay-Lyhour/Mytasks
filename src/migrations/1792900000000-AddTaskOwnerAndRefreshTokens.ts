@@ -4,8 +4,7 @@ export class AddTaskOwnerAndRefreshTokens1792900000000 implements MigrationInter
   name = 'AddTaskOwnerAndRefreshTokens1792900000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DELETE FROM "tasks"`);
-    await queryRunner.query(`ALTER TABLE "tasks" ADD "userId" integer NOT NULL`);
+    await queryRunner.query(`ALTER TABLE "tasks" ADD "userId" integer`);
     await queryRunner.query(
       `ALTER TABLE "tasks" ADD CONSTRAINT "FK_tasks_user" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );

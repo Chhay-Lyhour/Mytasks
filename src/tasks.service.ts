@@ -14,27 +14,27 @@ export class TasksService {
 
   async findAll(userId: number): Promise<Task[]> {
     return this.tasksRepository.find({
-      where: { userId },
+      where: { ownerId: userId },
       order: { id: 'ASC' },
     });
   }
 
   async findDone(userId: number): Promise<Task[]> {
     return this.tasksRepository.find({
-      where: { done: true, userId },
+      where: { done: true, ownerId: userId },
       order: { id: 'ASC' },
     });
   }
 
   async findTodo(userId: number): Promise<Task[]> {
     return this.tasksRepository.find({
-      where: { done: false, userId },
+      where: { done: false, ownerId: userId },
       order: { id: 'ASC' },
     });
   }
 
   async findOne(id: number, userId: number): Promise<Task> {
-    const task = await this.tasksRepository.findOneBy({ id, userId });
+    const task = await this.tasksRepository.findOneBy({ id, ownerId: userId });
     if (!task) {
       this.logger.warn(`Task with ID ${id} was not found for user ${userId}`);
       throw new NotFoundException(`Task ${id} was not found`);
@@ -43,7 +43,11 @@ export class TasksService {
   }
 
   async create(title: string, userId: number): Promise<Task> {
-    const task = this.tasksRepository.create({ title, done: false, userId });
+    const task = this.tasksRepository.create({
+      title,
+      done: false,
+      ownerId: userId,
+    });
     const savedTask = await this.tasksRepository.save(task);
     this.logger.log(`Created task ${savedTask.id}`);
     this.logger.debug(`Created task title: ${JSON.stringify(savedTask.title)}`);
@@ -60,7 +64,7 @@ export class TasksService {
 
   async remove(id: number, userId: number): Promise<Task> {
     const task = await this.findOne(id, userId);
-    await this.tasksRepository.delete({ id, userId });
+    await this.tasksRepository.delete({ id, ownerId: userId });
     this.logger.log(`Deleted task ${id}`);
     return task;
   }

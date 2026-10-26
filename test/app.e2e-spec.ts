@@ -67,8 +67,11 @@ describe('Session 3 auth lab (e2e)', () => {
     await request(app.getHttpServer()).get('/api/todos').expect(401);
   });
 
-  it('Alice only sees her todos, and Bob\'s todo is 404', async () => {
-    await request(app.getHttpServer()).post('/api/auth/signup').send(bob).expect(201);
+  it("Alice only sees her todos, and Bob's todo is 404", async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/signup')
+      .send(bob)
+      .expect(201);
 
     const aliceLogin = await request(app.getHttpServer())
       .post('/api/auth/login')
@@ -80,7 +83,9 @@ describe('Session 3 auth lab (e2e)', () => {
       .expect(200);
 
     expect(aliceLogin.body.accessToken).toEqual(expect.any(String));
-    expect(aliceLogin.headers['set-cookie']?.join(';')).toMatch(/refreshToken=/);
+    expect(aliceLogin.headers['set-cookie']?.join(';')).toMatch(
+      /refreshToken=/,
+    );
 
     await request(app.getHttpServer())
       .post('/api/todos')
@@ -103,7 +108,8 @@ describe('Session 3 auth lab (e2e)', () => {
     expect(aliceTodos.body[0].title).toBe("Alice's homework");
     expect(
       aliceTodos.body.every(
-        (todo: { userId: number }) => todo.userId === aliceTodos.body[0].userId,
+        (todo: { ownerId: number }) =>
+          todo.ownerId === aliceTodos.body[0].ownerId,
       ),
     ).toBe(true);
 
@@ -111,5 +117,53 @@ describe('Session 3 auth lab (e2e)', () => {
       .get(`/api/todos/${bobTodo.body.id}`)
       .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
       .expect(404);
+  });
+
+  it('rotates refresh tokens once and revokes them on logout', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+    const refreshCookie = login.headers['set-cookie']?.[0]?.split(';', 1)[0];
+    expect(refreshCookie).toMatch(/^refreshToken=/);
+    if (!refreshCookie) {
+      throw new Error('Login did not set the refresh-token cookie');
+    }
+
+    const refreshAttempts = await Promise.all([
+      request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set('Cookie', refreshCookie),
+      request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set('Cookie', refreshCookie),
+    ]);
+    expect(
+      refreshAttempts
+        .map((response) => response.status)
+        .sort((left, right) => left - right),
+    ).toEqual([200, 401]);
+
+    const logoutLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+    const logoutCookie = logoutLogin.headers['set-cookie']?.[0]?.split(
+      ';',
+      1,
+    )[0];
+    expect(logoutCookie).toMatch(/^refreshToken=/);
+    if (!logoutCookie) {
+      throw new Error('Login did not set the refresh-token cookie');
+    }
+
+    await request(app.getHttpServer())
+      .post('/api/auth/logout')
+      .set('Cookie', logoutCookie)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .set('Cookie', logoutCookie)
+      .expect(401);
   });
 });
