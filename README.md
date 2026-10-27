@@ -118,6 +118,28 @@ in order: sign up, login, create, and PATCH. The create request emits
 `task.created` to both listeners; the title-only PATCH emits `task.updated`.
 The PATCH response should have `title: "Buy milk"` and `done: false`.
 
+## Redis task reminders
+
+On macOS with Homebrew, install and start Redis, then check that it responds:
+
+```bash
+brew install redis
+brew services start redis
+redis-cli ping
+```
+
+The expected reply is `PONG`. Set `REDIS_HOST=127.0.0.1` and
+`REDIS_PORT=6379` in `.env` (also shown in `.env.example`), then start the API
+with `npm run start:dev`. When a task is created, the notification listener
+queues a `send-reminder` job with a five-second delay and up to three attempts.
+`TasksProcessor` handles the reminder; failed jobs are logged and retried by
+BullMQ. The queue is stored in Redis, so a pending reminder survives an API
+restart while Redis remains running.
+
+To demonstrate restart persistence, create a task and stop only the API before
+the five-second delay expires. Leave Redis running, restart the API, and watch
+for `Reminder for task ...` in the terminal.
+
 The API1/Broken Object Level Authorization risk is cross-user access through a
 to-do ID. To prevent it, every to-do query includes the authenticated user's
 `ownerId`; the e2e suite checks that Alice receives `404` for Bob's to-do. The
