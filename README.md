@@ -45,6 +45,26 @@ tables are managed with TypeORM migrations. Tasks are stored in the PostgreSQL
 `tasks` table and registered accounts are stored in the `users` table, so they
 remain available after the application restarts.
 
+## Run the full stack with Docker Compose
+
+Copy `.env.example` to `.env` and set a private `DB_PASSWORD` and `JWT_SECRET`.
+Build and start the API, PostgreSQL, and Redis together:
+
+```bash
+docker compose up --build
+```
+
+The API waits for PostgreSQL and Redis to become healthy, runs pending
+migrations, then starts on <http://localhost:3000>. Database records persist in
+the `postgres_data` named volume. Stop and restart the stack with
+`docker compose down` and `docker compose up`; avoid `docker compose down -v`
+unless you intend to delete that data.
+
+The Docker image uses a multi-stage build and does not include `.env` or other
+environment files. Compose passes the database credentials and JWT secret at
+runtime. For an already-built production image, run migrations with
+`npm run migration:run:prod`; locally, `npm run migration:run` remains available.
+
 ## Authentication
 
 All API routes are under `/api` and are protected by a global auth guard unless
@@ -114,9 +134,10 @@ Desktop Agent, and run the collection to exercise the same two-user flow.
 Import
 [`postman/MyTasks-Task-Events-Demo.postman_collection.json`](./postman/MyTasks-Task-Events-Demo.postman_collection.json).
 Open the API terminal and Postman side by side, then send each request manually
-in order: sign up, login, create, and PATCH. The create request emits
+in order: sign up, login, create, PATCH, and GET `/tasks`. The create request emits
 `task.created` to both listeners; the title-only PATCH emits `task.updated`.
-The PATCH response should have `title: "Buy milk"` and `done: false`.
+The PATCH response should have `title: "Buy milk"` and `done: false`; the final
+GET verifies the task is still present.
 
 ## Redis task reminders
 

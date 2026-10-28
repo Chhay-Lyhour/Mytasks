@@ -196,6 +196,36 @@
         },
         "url": "{{baseUrl}}/todos/{{taskId}}"
       }
+    },
+    {
+      "name": "5. List tasks (verify the task remains)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('task appears in the authenticated user task list', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const tasks = pm.response.json();",
+              "  const taskId = Number(pm.collectionVariables.get('taskId'));",
+              "  pm.expect(tasks).to.be.an('array');",
+              "  pm.expect(tasks.some((task) => task.id === taskId && task.title === 'Buy milk')).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/tasks"
+      }
     }
   ]
 }

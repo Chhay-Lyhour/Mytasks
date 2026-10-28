@@ -1,8 +1,15 @@
 import 'dotenv/config';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DataSource } from 'typeorm';
 import { RefreshToken } from './refresh-token.entity.js';
 import { Task } from './task.entity.js';
 import { User } from './user.entity.js';
+
+const migrationsDirectory = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  'migrations',
+);
 
 const requiredEnv = (name: string): string => {
   const value = process.env[name];
@@ -20,6 +27,6 @@ export default new DataSource({
   password: requiredEnv('DB_PASSWORD'),
   database: requiredEnv('DB_DATABASE'),
   entities: [Task, User, RefreshToken],
-  migrations: ['src/migrations/*{.ts,.js}'],
+  migrations: [`${migrationsDirectory}/*{.ts,.js}`],
   synchronize: false,
 });
