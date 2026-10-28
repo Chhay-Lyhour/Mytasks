@@ -19,6 +19,7 @@ import { TasksProcessor } from './tasks/tasks.processor.js';
 import { RefreshToken } from './refresh-token.entity.js';
 import { Task } from './task.entity.js';
 import { User } from './user.entity.js';
+import { RecipesModule } from './recipes/recipes.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -54,6 +55,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       }),
     }),
     TypeOrmModule.forFeature([Task, User, RefreshToken]),
+    RecipesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
