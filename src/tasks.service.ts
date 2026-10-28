@@ -15,7 +15,7 @@ export class TasksService {
     @InjectRepository(Task)
     private readonly tasksRepository: Repository<Task>,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   async findAll(userId: number): Promise<Task[]> {
     return this.tasksRepository.find({
@@ -42,7 +42,7 @@ export class TasksService {
     const task = await this.tasksRepository.findOneBy({ id, ownerId: userId });
     if (!task) {
       this.logger.warn(`Task with ID ${id} was not found for user ${userId}`);
-      throw new NotFoundException(`Task ${id} was not found`);
+      throw new NotFoundException(`Task with ID ${id} was not found`);
     }
     return task;
   }
