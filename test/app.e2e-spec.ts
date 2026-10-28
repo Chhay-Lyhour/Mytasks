@@ -1,181 +1,225 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import {
+  INestApplication,
+  Injectable,
+  Logger,
+  ValidationPipe,
+} from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { TaskCreatedEvent } from '../src/tasks/task-created.event.js';
 
-describe('AppController (e2e)', () => {
+@Injectable()
+class ThrowingTaskCreatedTestListener {
+  static enabled = false;
+  private readonly logger = new Logger(ThrowingTaskCreatedTestListener.name);
+
+  @OnEvent('task.created')
+  handleTaskCreated(_event: TaskCreatedEvent): void {
+    if (ThrowingTaskCreatedTestListener.enabled) {
+      throw new Error('Intentional listener error for isolation test');
+    }
+  }
+}
+
+describe('Session 3 auth lab (e2e)', () => {
   let app: INestApplication<App>;
+  const stamp = Date.now();
+  const alice = {
+    email: `alice.${stamp}@test.dev`,
+    password: 'secret123',
+  };
+  const bob = {
+    email: `bob.${stamp}@test.dev`,
+    password: 'secret123',
+  };
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
+      providers: [ThrowingTaskCreatedTestListener],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    app.use(cookieParser());
+    app.useGlobalPipes(new ValidationPipe());
     await app.init();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body.message).toBe('Welcome to MyTasks, Dara!');
-        expect(body.taskCount).toBe(body.tasks.length);
-        expect(body.tasks).toEqual([
-          'Install Node.js',
-          'Create mytasks',
-          'Run my server',
-        ]);
-        expect(Number.isNaN(Date.parse(body.serverTime))).toBe(false);
-      });
+  afterAll(async () => {
+    await app.close();
   });
 
-  it('/tasks (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/tasks')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).toHaveLength(5);
-        expect(body).toEqual([
-          { id: 1, title: 'Plan the week in MyTasks', done: true },
-          { id: 2, title: 'Review the NestJS controller', done: false },
-          { id: 3, title: 'Test the tasks API routes', done: false },
-          { id: 4, title: 'Update the project README', done: false },
-          { id: 5, title: "Organize tomorrow's priorities", done: false },
-        ]);
-      });
+  it('POST /api/auth/signup returns 201 { id, email } with no hash', async () => {
+    const { body } = await request(app.getHttpServer())
+      .post('/api/auth/signup')
+      .send(alice)
+      .expect(201);
+
+    expect(body).toEqual({
+      id: expect.any(Number),
+      email: alice.email,
+    });
+    expect(body).not.toHaveProperty('password');
+    expect(body).not.toHaveProperty('passwordHash');
   });
 
-  it('creates three tasks and includes them in /tasks (GET)', async () => {
-    const newTasks = [
-      { id: 6, title: 'Plan the grocery list', done: false },
-      { id: 7, title: 'Book a dentist appointment', done: false },
-      { id: 8, title: 'Water the plants', done: false },
-    ];
+  it('signup with the same email returns 409 Conflict', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/signup')
+      .send(alice)
+      .expect(409);
+  });
 
-    for (const task of newTasks) {
+  it('login with the wrong password returns 401 Invalid credentials', async () => {
+    const { body } = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: alice.email, password: 'wrong-password' })
+      .expect(401);
+
+    expect(body.message).toBe('Invalid credentials');
+  });
+
+  it('GET /api/todos without a token returns 401', async () => {
+    await request(app.getHttpServer()).get('/api/todos').expect(401);
+  });
+
+  it("Alice only sees her todos, and Bob's todo is 404", async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/signup')
+      .send(bob)
+      .expect(201);
+
+    const aliceLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+    const bobLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(bob)
+      .expect(200);
+
+    expect(aliceLogin.body.accessToken).toEqual(expect.any(String));
+    expect(aliceLogin.headers['set-cookie']?.join(';')).toMatch(
+      /refreshToken=/,
+    );
+
+    const aliceTodo = await request(app.getHttpServer())
+      .post('/api/todos')
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .send({ title: "Alice's homework" })
+      .expect(201);
+
+    const titleUpdatedTodo = await request(app.getHttpServer())
+      .patch(`/api/todos/${aliceTodo.body.id}`)
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .send({ title: 'Buy milk' })
+      .expect(200);
+    expect(titleUpdatedTodo.body.title).toBe('Buy milk');
+    expect(titleUpdatedTodo.body.done).toBe(false);
+
+    const completedTodo = await request(app.getHttpServer())
+      .patch(`/api/todos/${aliceTodo.body.id}`)
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .send({ done: true })
+      .expect(200);
+    expect(completedTodo.body.title).toBe('Buy milk');
+    expect(completedTodo.body.done).toBe(true);
+
+    const bobTodo = await request(app.getHttpServer())
+      .post('/api/todos')
+      .set('Authorization', `Bearer ${bobLogin.body.accessToken}`)
+      .send({ title: "Bob's secret" })
+      .expect(201);
+
+    const aliceTodos = await request(app.getHttpServer())
+      .get('/api/todos')
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .expect(200);
+
+    expect(aliceTodos.body).toHaveLength(1);
+    expect(aliceTodos.body[0].title).toBe('Buy milk');
+    expect(aliceTodos.body[0].done).toBe(true);
+    expect(
+      aliceTodos.body.every(
+        (todo: { ownerId: number }) =>
+          todo.ownerId === aliceTodos.body[0].ownerId,
+      ),
+    ).toBe(true);
+
+    await request(app.getHttpServer())
+      .get(`/api/todos/${bobTodo.body.id}`)
+      .set('Authorization', `Bearer ${aliceLogin.body.accessToken}`)
+      .expect(404);
+  });
+
+  it('returns 201 when a task-created listener throws', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+
+    ThrowingTaskCreatedTestListener.enabled = true;
+    try {
       await request(app.getHttpServer())
-        .post('/tasks')
-        .send({ title: task.title })
-        .expect(201)
-        .expect(task);
+        .post('/api/todos')
+        .set('Authorization', `Bearer ${login.body.accessToken}`)
+        .send({ title: 'Listener failure should not fail this request' })
+        .expect(201);
+    } finally {
+      ThrowingTaskCreatedTestListener.enabled = false;
+    }
+  });
+
+  it('rotates refresh tokens once and revokes them on logout', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+    const refreshCookie = login.headers['set-cookie']?.[0]?.split(';', 1)[0];
+    expect(refreshCookie).toMatch(/^refreshToken=/);
+    if (!refreshCookie) {
+      throw new Error('Login did not set the refresh-token cookie');
     }
 
-    return request(app.getHttpServer())
-      .get('/tasks')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).toHaveLength(8);
-        expect(body.slice(-3)).toEqual(newTasks);
-      });
-  });
+    const refreshAttempts = await Promise.all([
+      request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set('Cookie', refreshCookie),
+      request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set('Cookie', refreshCookie),
+    ]);
+    expect(
+      refreshAttempts
+        .map((response) => response.status)
+        .sort((left, right) => left - right),
+    ).toEqual([200, 401]);
 
-  it('creates, marks done, and deletes a task', async () => {
-    const createdTask = {
-      id: 6,
-      title: 'Complete the MyTasks CRUD demo',
-      done: false,
-    };
-
-    await request(app.getHttpServer())
-      .post('/tasks')
-      .send({ title: createdTask.title })
-      .expect(201)
-      .expect(createdTask);
-
-    await request(app.getHttpServer())
-      .get('/tasks')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).toContainEqual(createdTask);
-      });
-
-    const doneTask = { ...createdTask, done: true };
-    await request(app.getHttpServer())
-      .patch(`/tasks/${createdTask.id}`)
-      .send({ done: true })
-      .expect(200)
-      .expect(doneTask);
+    const logoutLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send(alice)
+      .expect(200);
+    const logoutCookie = logoutLogin.headers['set-cookie']?.[0]?.split(
+      ';',
+      1,
+    )[0];
+    expect(logoutCookie).toMatch(/^refreshToken=/);
+    if (!logoutCookie) {
+      throw new Error('Login did not set the refresh-token cookie');
+    }
 
     await request(app.getHttpServer())
-      .get('/tasks')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).toContainEqual(doneTask);
-      });
-
+      .post('/api/auth/logout')
+      .set('Cookie', logoutCookie)
+      .expect(200);
     await request(app.getHttpServer())
-      .delete(`/tasks/${createdTask.id}`)
-      .expect(200)
-      .expect(doneTask);
-
-    return request(app.getHttpServer())
-      .get('/tasks')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).not.toContainEqual(doneTask);
-        expect(body).toHaveLength(5);
-      });
-  });
-
-  it('/tasks/todo (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/tasks/todo')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).toHaveLength(4);
-        expect(body.every((task: { done: boolean }) => task.done === false))
-          .toBe(true);
-        expect(body.map((task: { id: number }) => task.id)).toEqual([
-          2, 3, 4, 5,
-        ]);
-      });
-  });
-
-  it('/tasks/done (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/tasks/done')
-      .expect(200)
-      .expect(({ body }) => {
-        expect(body).toEqual([
-          { id: 1, title: 'Plan the week in MyTasks', done: true },
-        ]);
-      });
-  });
-
-  it('/tasks/agent (GET) returns the request user-agent', () => {
-    return request(app.getHttpServer())
-      .get('/tasks/agent')
-      .set('User-Agent', 'MyTasks-Test-Agent/1.0')
-      .expect(200)
-      .expect({ agent: 'MyTasks-Test-Agent/1.0' });
-  });
-
-  it.each([
-    [1, 'Plan the week in MyTasks', true],
-    [2, 'Review the NestJS controller', false],
-    [3, 'Test the tasks API routes', false],
-  ])('/tasks/%s (GET) returns that task', (id, title, done) => {
-    return request(app.getHttpServer())
-      .get(`/tasks/${id}`)
-      .expect(200)
-      .expect({
-        id,
-        title,
-        done,
-      });
-  });
-
-  it('/tasks/999 (GET) returns an empty response', () => {
-    return request(app.getHttpServer())
-      .get('/tasks/999')
-      .expect(200)
-      .expect('');
-  });
-
-  afterEach(async () => {
-    await app.close();
+      .post('/api/auth/refresh')
+      .set('Cookie', logoutCookie)
+      .expect(401);
   });
 });

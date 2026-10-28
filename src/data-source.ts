@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { RefreshToken } from './refresh-token.entity.js';
 import { Task } from './task.entity.js';
 import { User } from './user.entity.js';
 
@@ -18,7 +19,7 @@ export default new DataSource({
   username: requiredEnv('DB_USERNAME'),
   password: requiredEnv('DB_PASSWORD'),
   database: requiredEnv('DB_DATABASE'),
-  entities: [Task, User],
+  entities: [Task, User, RefreshToken],
   migrations: ['src/migrations/*{.ts,.js}'],
   synchronize: false,
 });

@@ -47,22 +47,104 @@ remain available after the application restarts.
 
 ## Authentication
 
-Register an account with `POST /auth/register`:
+All API routes are under `/api` and are protected by a global auth guard unless
+they are marked public (`signup`, `login`, `refresh`, and `logout`).
+
+Register an account with `POST /api/auth/signup` (also available as
+`POST /api/auth/register`):
 
 ```json
 {
-  "email": "you@example.com",
-  "password": "your-password"
+  "email": "alice@test.dev",
+  "password": "secret123"
 }
 ```
 
-Registration returns the new user's `id` and `email`; passwords are stored as
-bcrypt hashes and are never included in API responses. Registering an email that
-already exists returns `409 Conflict`.
+Registration returns `{ "id": 1, "email": "alice@test.dev" }`. Passwords are
+stored as bcrypt hashes and are never included in API responses. Registering an
+email that already exists returns `409 Conflict`.
 
-Log in with `POST /auth/login` using the same JSON fields. A successful login
-returns an `access_token` JWT. An incorrect email/password returns
-`401 Unauthorized`.
+Log in with `POST /api/auth/login` using the same JSON fields. A successful
+login returns `{ "accessToken": "..." }` and sets a rotated refresh token in an
+HttpOnly cookie. An incorrect email/password returns `401` with
+`Invalid credentials`.
+
+`GET /api/todos` requires a Bearer access token and returns only the signed-in
+user's to-dos. `GET /api/todos/:id` returns `404` if the to-do belongs to
+someone else.
+
+Refresh the access token with `POST /api/auth/refresh` (cookie-based, rotated).
+Revoke it with `POST /api/auth/logout`.
+
+A small React client lives in `web/`. It keeps the access token in memory and
+uses an axios interceptor to call `/api/auth/refresh` on `401`. Run it with
+`npm run start:web` while the API is on port 3000.
+
+## Run the auth and authorization lab
+
+Apply any pending database migrations:
+
+```bash
+npm run migration:run
+```
+
+Start the API in one terminal and the React UI in another:
+
+```bash
+npm run start:dev
+```
+
+```bash
+npm run start:web
+```
+
+Open <http://localhost:5173>. Sign up Alice, add a to-do, log out, and sign up
+Bob. Each account should see only its own to-dos. For an API-level check, run
+`npm run test:e2e`; it verifies signup, duplicate-email rejection, bad-password
+rejection, unauthenticated access, cross-user to-do isolation, refresh-token
+rotation, and logout.
+
+The matching Postman Runner collection is
+[`postman/MyTasks-AuthZ-Lab.postman_collection.json`](./postman/MyTasks-AuthZ-Lab.postman_collection.json).
+Import it, keep `baseUrl` set to `http://localhost:3000/api`, select the
+Desktop Agent, and run the collection to exercise the same two-user flow.
+
+## Demonstrate task events
+
+Import
+[`postman/MyTasks-Task-Events-Demo.postman_collection.json`](./postman/MyTasks-Task-Events-Demo.postman_collection.json).
+Open the API terminal and Postman side by side, then send each request manually
+in order: sign up, login, create, and PATCH. The create request emits
+`task.created` to both listeners; the title-only PATCH emits `task.updated`.
+The PATCH response should have `title: "Buy milk"` and `done: false`.
+
+## Redis task reminders
+
+On macOS with Homebrew, install and start Redis, then check that it responds:
+
+```bash
+brew install redis
+brew services start redis
+redis-cli ping
+```
+
+The expected reply is `PONG`. Set `REDIS_HOST=127.0.0.1` and
+`REDIS_PORT=6379` in `.env` (also shown in `.env.example`), then start the API
+with `npm run start:dev`. When a task is created, the notification listener
+queues a `send-reminder` job with a five-second delay and up to three attempts.
+`TasksProcessor` handles the reminder; failed jobs are logged and retried by
+BullMQ. The queue is stored in Redis, so a pending reminder survives an API
+restart while Redis remains running.
+
+To demonstrate restart persistence, create a task and stop only the API before
+the five-second delay expires. Leave Redis running, restart the API, and watch
+for `Reminder for task ...` in the terminal.
+
+The API1/Broken Object Level Authorization risk is cross-user access through a
+to-do ID. To prevent it, every to-do query includes the authenticated user's
+`ownerId`; the e2e suite checks that Alice receives `404` for Bob's to-do. The
+refresh endpoint also consumes tokens with a conditional database update so
+simultaneous requests cannot both rotate the same token.
 
 Run TypeORM migrations from the project root:
 
@@ -170,4 +252,5 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
 # Mytasks

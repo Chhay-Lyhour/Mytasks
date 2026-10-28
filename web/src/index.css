@@ -1,0 +1,96 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #e8edf5;
+  background: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, #1f3b5b 0%, transparent 40%),
+    #111827;
+}
+
+#root {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 2rem;
+}
+
+p {
+  color: #9ca3af;
+}
+
+form,
+.panel {
+  display: grid;
+  gap: 12px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+input {
+  border: 1px solid #4b5563;
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #f97316;
+  color: #111827;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #374151;
+  color: #f9fafb;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.error {
+  color: #fca5a5;
+}
+
+.todo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #374151;
+}
+
+.todo button {
+  background: #7f1d1d;
+  color: #fecaca;
+}
